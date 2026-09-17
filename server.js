@@ -1,13 +1,16 @@
 const express = require('express');
 const app = express();
-const ws = require('ws');
+const {WebSocketServer} = require('ws');
 const http = require('http');
 const crypto = require('crypto');
+const fs = require('fs/promises');
+const {setTimeout} = require('timers/promises');
 
+let etatEcriture = Promise.resolve();
+let queueSize = 0;
 const server = http.createServer(app);
-const wss = new ws.Server({ server });
+const wss = new WebSocketServer({ server });
 app.use(express.static('public'));
-
 app.set('view engine', 'ejs');
 const mapClients = new Map()
 Map.prototype.find = function(callback)  {
@@ -18,14 +21,25 @@ Map.prototype.find = function(callback)  {
   }
   return null;
 }
+async function writeFile(chemin, contenu, option = 'utf8'){
+  while (queueSize >= 500){
+    await setTimeout(50);
+  }
+  queueSize++;
+  const attente = etatEcriture.catch(()=>{});
+	etatEcriture = (async function(){
+		await attente; 
+		return await fs.writeFile(chemin, contenu, option);
+	})();
+	try{
+		return await etatEcriture;
+	}
+	finally{
+		queueSize--;
+	}
+}
 wss.on('connection', (socket) => {
-  const id = crypto.randomUUID();
-  socket.on('message', (rawBuffer) => {
-    const message = JSON.parse(rawBuffer.toString());
-    switch (message.ACTION) {
-      case 'REJOINDRE_SALON':
-        message
-    }
-  })
-
+  socket.id = crypto.randomUUID();
+	clientsMap.set(socket.id, socket);
 });
+server.listen(3000, ()=>{})
